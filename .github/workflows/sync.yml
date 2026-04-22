@@ -1,13 +1,18 @@
-name: Sync to Google Apps Script
+name: Sync with Google Apps Script
 
 on:
   push:
     branches: [main]
     tags: ["v*"]
+  schedule:
+    - cron: "0 9 * * *" # daily at 9am UTC (3am CT)
+  workflow_dispatch: # allow manual trigger from the Actions UI
 
 jobs:
-  clasp-push:
+  sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -22,9 +27,31 @@ jobs:
       - name: Restore clasp credentials
         run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
 
+      # ── GitHub → Apps Script (push to main) ───────────────────────────────
       - name: Push to Apps Script
+        if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
         run: clasp push --force
 
-      - name: Create Apps Script version (on git tag)
+      # ── GitHub → Apps Script + new version (git tag) ──────────────────────
+      - name: Push to Apps Script and create version
         if: startsWith(github.ref, 'refs/tags/')
-        run: clasp version "${{ github.ref_name }}"
+        run: |
+          clasp push --force
+          clasp version "${{ github.ref_name }}"
+
+      # ── Apps Script → GitHub (scheduled or manual) ────────────────────────
+      - name: Pull from Apps Script and commit if changed
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: |
+          clasp pull
+          # clasp v3 writes sync.js; rename to sync.gs to match what we push
+          [ -f sync.js ] && mv sync.js sync.gs
+          if git diff --quiet; then
+            echo "Apps Script matches GitHub — nothing to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add sync.gs appsscript.json
+            git commit -m "chore: sync changes pulled from Apps Script editor"
+            git push
+          fi
