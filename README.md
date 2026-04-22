@@ -62,6 +62,41 @@ After `clasp push`:
 2. Run `setupTrigger()` once to install the daily trigger.
 3. If logic changed, run `resetSync()` before the next `syncCalendars()` so old events don't linger.
 
+## CI/CD — Bidirectional sync and versioning
+
+A GitHub Actions workflow (`.github/workflows/sync.yml`) keeps this repo and the live Apps Script project in sync automatically. Every change that reaches `main` — from either side — produces a new patch version tag.
+
+### How changes flow
+
+| Trigger | Direction | What happens |
+| --- | --- | --- |
+| Merge / push to `main` | GitHub → Apps Script | `clasp push`, auto-bump patch tag (e.g. `v1.0.1`), new Apps Script version |
+| Daily schedule (9am UTC) or manual run | Apps Script → GitHub | `clasp pull`; if changed, commit to `main`, bump patch tag, new Apps Script version |
+| Manually pushed `v*` tag (e.g. `v2.0.0`) | GitHub → Apps Script | `clasp push`, Apps Script version using your tag — use this for major/minor bumps |
+
+### Versioning rules
+
+- **Patch bumps are automatic** — every merge to `main` and every Apps Script editor change increments the patch number (`v1.0.x`).
+- **Major/minor bumps are manual** — push a tag yourself (`git tag -a v2.0.0 -m "..." && git push origin v2.0.0`) when a change warrants it. The workflow will sync it to Apps Script and create the matching version.
+- Git tags and Apps Script versions are always kept in sync — each git tag corresponds to an Apps Script version with the same name.
+
+### Triggering a manual sync
+
+To pull Apps Script changes into GitHub on demand without waiting for the daily schedule:
+
+1. Go to the **Actions** tab in this repo.
+2. Select **Sync with Google Apps Script**.
+3. Click **Run workflow** → **Run workflow**.
+
+### Secret setup
+
+The workflow authenticates to clasp using a `CLASPRC_JSON` repository secret containing the OAuth token from `~/.clasprc.json`. To refresh it after a token expiry:
+
+```bash
+clasp login --creds ~/path/to/oauth-creds.json
+gh secret set CLASPRC_JSON --repo EWB-Greater-Austin/gw-unified-calendar < ~/.clasprc.json
+```
+
 ## Config
 
 All configuration lives at the top of `sync.gs`:
