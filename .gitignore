@@ -1,0 +1,4 @@
+.DS_Store
+
+# clasp v3 pulls .gs files as .js; we push from .gs so the .js copy is noise
+sync.js
