@@ -1,4 +1,6 @@
 .DS_Store
+CLAUDE.md
+sa-key.json
 
 # clasp v3 pulls .gs files as .js; we push from .gs so the .js copy is noise
 sync.js
