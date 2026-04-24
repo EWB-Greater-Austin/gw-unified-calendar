@@ -2,7 +2,7 @@ var UNIFIED_CAL_ID     = 'c_0537251faa40b34a31272711a6f62423885368638d451a8b0f5e
 var GROUP_EMAIL        = 'internal@ewbgreateraustin.org';
 var SOURCE_KEY         = 'sourceRef'; // extendedProperties.private key
 var BIRTHDAY_SHEET_ID  = '1UAdrItjXXKI5Iv-8pH3Zx1A63_lQvpFdew166J5WlKw';
-var BIRTHDAY_TAB_NAME  = 'Birthday';
+var BIRTHDAY_TAB_NAME  = 'Master List';
 var BIRTHDAY_NAMES_KEY = 'birthdayNames'; // ScriptProperties key for cleanup tracking
 
 // Entry point — runs daily via trigger (~3am).
@@ -183,6 +183,10 @@ function resetSync() {
 
 function syncBirthdays() {
   var sheet = SpreadsheetApp.openById(BIRTHDAY_SHEET_ID).getSheetByName(BIRTHDAY_TAB_NAME);
+  if (!sheet) {
+    console.error('syncBirthdays: tab "' + BIRTHDAY_TAB_NAME + '" not found in spreadsheet');
+    return;
+  }
   var data    = sheet.getDataRange().getValues();
   var headers = data[0];
   var nameCol = headers.indexOf('Concatenated Name');
