@@ -91,6 +91,15 @@ jobs:
           clasp push --force
           clasp version "${{ github.ref_name }}"
 
+          # Remove any auto-generated patch tag on the same commit (e.g. v1.0.1
+          # created by the merge step when a manual minor/major tag supersedes it).
+          for tag in $(git tag --points-at HEAD); do
+            if [ "$tag" != "${{ github.ref_name }}" ]; then
+              git push origin --delete "$tag"
+              echo "Deleted superseded auto-tag $tag"
+            fi
+          done
+
       # ── Apps Script → GitHub (scheduled or manual) ────────────────────────
       - name: Pull from Apps Script and commit if changed
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
