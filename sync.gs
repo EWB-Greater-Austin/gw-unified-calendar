@@ -203,18 +203,27 @@ function syncBirthdays() {
 
   for (var i = 1; i < data.length; i++) {
     var name    = String(data[i][nameCol]).trim();
-    var bdayRaw = String(data[i][bdayCol]).trim();
-    if (!name || !bdayRaw) continue;
+    var bdayVal = data[i][bdayCol];
+    if (!name || bdayVal === '' || bdayVal == null) continue;
 
-    var parts = bdayRaw.split('-');
-    if (parts.length < 2) continue;
-    var month = parseInt(parts[0], 10);
-    var day   = parseInt(parts[1], 10);
+    // Sheets returns a Date object for date-formatted cells, a string otherwise.
+    var month, day;
+    if (bdayVal instanceof Date) {
+      month = bdayVal.getMonth() + 1;
+      day   = bdayVal.getDate();
+    } else {
+      var parts = String(bdayVal).trim().split('-');
+      if (parts.length < 2) continue;
+      month = parseInt(parts[0], 10);
+      day   = parseInt(parts[1], 10);
+    }
     if (isNaN(month) || isNaN(day)) continue;
 
     currentNames.push(name);
     upsertBirthdayEvent(name, month, day);
   }
+
+  console.log('syncBirthdays: processed ' + currentNames.length + ' birthdays');
 
   // Remove events for people no longer in the sheet.
   previousNames.forEach(function(name) {
