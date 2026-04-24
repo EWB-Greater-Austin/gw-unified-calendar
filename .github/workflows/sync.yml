@@ -54,8 +54,8 @@ jobs:
                       'expiry_date': int(creds.expiry.timestamp() * 1000)
                   },
                   'oauth2ClientSettings': {
-                      'clientId': '',
-                      'clientSecret': '',
+                      'clientId': 'unused',
+                      'clientSecret': 'unused',
                       'redirectUri': 'http://localhost'
                   },
                   'isLocalCreds': False
