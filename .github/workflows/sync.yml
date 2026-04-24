@@ -27,7 +27,43 @@ jobs:
         run: npm install -g @google/clasp
 
       - name: Restore clasp credentials
-        run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+        run: |
+          echo '${{ secrets.GOOGLE_SA_KEY }}' > /tmp/sa-key.json
+          pip install --quiet google-auth requests
+          python3 << 'EOF'
+          import json, os
+          from google.oauth2 import service_account
+          import google.auth.transport.requests
+
+          creds = service_account.Credentials.from_service_account_file(
+              '/tmp/sa-key.json',
+              scopes=[
+                  'https://www.googleapis.com/auth/script.projects',
+                  'https://www.googleapis.com/auth/drive',
+                  'https://www.googleapis.com/auth/script.deployments',
+              ]
+          )
+          creds.refresh(google.auth.transport.requests.Request())
+          assert creds.token, 'No access token returned from service account'
+
+          with open(os.path.expanduser('~/.clasprc.json'), 'w') as f:
+              json.dump({
+                  'token': {
+                      'access_token': creds.token,
+                      'refresh_token': 'unused',
+                      'token_type': 'Bearer',
+                      'expiry_date': int(creds.expiry.timestamp() * 1000)
+                  },
+                  'oauth2ClientSettings': {
+                      'clientId': 'unused',
+                      'clientSecret': 'unused',
+                      'redirectUri': 'http://localhost'
+                  },
+                  'isLocalCreds': False
+              }, f)
+          print(f'clasp credentials written (token length: {len(creds.token)})')
+          EOF
+          rm -f /tmp/sa-key.json
 
       # ── Merge to main: auto-bump patch tag, push to Apps Script, new version ─
       - name: Auto-tag, push to Apps Script, and create version
@@ -54,6 +90,15 @@ jobs:
         run: |
           clasp push --force
           clasp version "${{ github.ref_name }}"
+
+          # Remove any auto-generated patch tag on the same commit (e.g. v1.0.1
+          # created by the merge step when a manual minor/major tag supersedes it).
+          for tag in $(git tag --points-at HEAD); do
+            if [ "$tag" != "${{ github.ref_name }}" ]; then
+              git push origin --delete "$tag"
+              echo "Deleted superseded auto-tag $tag"
+            fi
+          done
 
       # ── Apps Script → GitHub (scheduled or manual) ────────────────────────
       - name: Pull from Apps Script and commit if changed
