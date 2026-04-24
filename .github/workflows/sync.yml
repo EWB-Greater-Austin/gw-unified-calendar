@@ -50,6 +50,7 @@ jobs:
               json.dump({
                   'token': {
                       'access_token': creds.token,
+                      'refresh_token': 'unused',
                       'token_type': 'Bearer',
                       'expiry_date': int(creds.expiry.timestamp() * 1000)
                   },
