@@ -63,6 +63,7 @@ jobs:
               }, f)
           print(f'clasp credentials written (token length: {len(creds.token)})')
           EOF
+          rm -f /tmp/sa-key.json
 
       # ── Merge to main: auto-bump patch tag, push to Apps Script, new version ─
       - name: Auto-tag, push to Apps Script, and create version
