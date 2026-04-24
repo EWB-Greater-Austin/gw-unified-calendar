@@ -1,11 +1,8 @@
-var UNIFIED_CAL_ID     = 'c_0537251faa40b34a31272711a6f62423885368638d451a8b0f5e1fcff75ee37c@group.calendar.google.com';
-var GROUP_EMAIL        = 'internal@ewbgreateraustin.org';
-var SOURCE_KEY         = 'sourceRef'; // extendedProperties.private key
-var BIRTHDAY_SHEET_ID  = '1UAdrItjXXKI5Iv-8pH3Zx1A63_lQvpFdew166J5WlKw';
-var BIRTHDAY_TAB_NAME  = 'Birthday';
-var BIRTHDAY_NAMES_KEY = 'birthdayNames'; // ScriptProperties key for cleanup tracking
+var UNIFIED_CAL_ID = 'c_0537251faa40b34a31272711a6f62423885368638d451a8b0f5e1fcff75ee37c@group.calendar.google.com';
+var GROUP_EMAIL    = 'internal@ewbgreateraustin.org';
+var SOURCE_KEY     = 'sourceRef'; // extendedProperties.private key
 
-// Entry point — runs daily via trigger (~3am).
+// Entry point — runs hourly via trigger.
 function syncCalendars() {
   var members = getGroupMembers();
   members.forEach(function(member) {
@@ -15,7 +12,6 @@ function syncCalendars() {
       console.error('Failed syncing ' + member.email + ': ' + e);
     }
   });
-  syncBirthdays();
 }
 
 function syncMember(member) {
@@ -129,7 +125,7 @@ function buildPayload(src, userEmail, ref) {
     description: '[' + userEmail + ']' + (src.description ? '\n\n' + src.description : ''),
     start:       src.start,
     end:         src.end,
-    location:    userEmail === 'operations@ewbgreateraustin.org' ? (src.location || '') : '',
+    location:    '',
     status:      src.status,
     extendedProperties: { private: private_ }
   };
@@ -179,82 +175,6 @@ function resetSync() {
   });
 
   console.log('Reset complete. Deleted ' + toDelete.length + ' events. Run syncCalendars next.');
-}
-
-function syncBirthdays() {
-  var sheet = SpreadsheetApp.openById(BIRTHDAY_SHEET_ID).getSheetByName(BIRTHDAY_TAB_NAME);
-  var data    = sheet.getDataRange().getValues();
-  var headers = data[0];
-  var nameCol = headers.indexOf('Concatenated Name');
-  var bdayCol = headers.indexOf('Birthday');
-
-  if (nameCol === -1 || bdayCol === -1) {
-    console.error('syncBirthdays: required columns not found');
-    return;
-  }
-
-  var props         = PropertiesService.getScriptProperties();
-  var previousNames = JSON.parse(props.getProperty(BIRTHDAY_NAMES_KEY) || '[]');
-  var currentNames  = [];
-
-  for (var i = 1; i < data.length; i++) {
-    var name    = String(data[i][nameCol]).trim();
-    var bdayRaw = String(data[i][bdayCol]).trim();
-    if (!name || !bdayRaw) continue;
-
-    var parts = bdayRaw.split('-');
-    if (parts.length < 2) continue;
-    var month = parseInt(parts[0], 10);
-    var day   = parseInt(parts[1], 10);
-    if (isNaN(month) || isNaN(day)) continue;
-
-    currentNames.push(name);
-    upsertBirthdayEvent(name, month, day);
-  }
-
-  // Remove events for people no longer in the sheet.
-  previousNames.forEach(function(name) {
-    if (currentNames.indexOf(name) === -1) {
-      var id = makeEventId('birthday:' + name);
-      try {
-        Calendar.Events.remove(UNIFIED_CAL_ID, id);
-      } catch (e) {
-        if (!isNotFound(e)) console.error('Failed removing birthday for ' + name + ': ' + e);
-      }
-    }
-  });
-
-  props.setProperty(BIRTHDAY_NAMES_KEY, JSON.stringify(currentNames));
-}
-
-// Only ever creates/updates the single next occurrence rather than a recurring event.
-// This way, removing a member from the sheet removes their birthday from the calendar
-// on the next sync — no orphaned future recurrences to clean up.
-function upsertBirthdayEvent(name, month, day) {
-  var id    = makeEventId('birthday:' + name);
-  var today = new Date();
-  var bday  = new Date(today.getFullYear(), month - 1, day);
-  if (bday < today) bday.setFullYear(today.getFullYear() + 1);
-
-  var tz        = Session.getScriptTimeZone();
-  var startDate = Utilities.formatDate(bday, tz, 'yyyy-MM-dd');
-  var endDay    = new Date(bday); endDay.setDate(endDay.getDate() + 1);
-  var endDate   = Utilities.formatDate(endDay, tz, 'yyyy-MM-dd');
-
-  var payload = {
-    id:      id,
-    summary: '🎂 ' + name + "'s birthday!",
-    start:   { date: startDate },
-    end:     { date: endDate },
-    colorId: '5', // banana (yellow) — matches native birthday calendar
-    extendedProperties: { private: { sourceRef: 'birthday:' + name } }
-  };
-
-  if (unifiedEventExists(id)) {
-    Calendar.Events.update(payload, UNIFIED_CAL_ID, id);
-  } else {
-    Calendar.Events.insert(payload, UNIFIED_CAL_ID);
-  }
 }
 
 // Run once manually to install the daily trigger.
