@@ -24,33 +24,44 @@ jobs:
           node-version: "20"
 
       - name: Install clasp
-        run: npm install -g @google/clasp google-auth-library
+        run: npm install -g @google/clasp
 
       - name: Restore clasp credentials
         run: |
           echo '${{ secrets.GOOGLE_SA_KEY }}' > /tmp/sa-key.json
-          NODE_PATH=$(npm root -g) node -e "
-          const {GoogleAuth} = require('google-auth-library');
-          const fs = require('fs');
-          const os = require('os');
-          const auth = new GoogleAuth({
-            keyFile: '/tmp/sa-key.json',
-            scopes: [
-              'https://www.googleapis.com/auth/script.projects',
-              'https://www.googleapis.com/auth/drive',
-              'https://www.googleapis.com/auth/script.deployments',
-            ]
-          });
-          auth.getClient()
-            .then(c => c.getAccessToken())
-            .then(({token}) => {
-              fs.writeFileSync(
-                os.homedir() + '/.clasprc.json',
-                JSON.stringify({token: {access_token: token, token_type: 'Bearer', expiry_date: Date.now() + 3599000}})
-              );
-            })
-            .catch(e => { console.error(e); process.exit(1); });
-          "
+          pip install --quiet google-auth requests
+          python3 << 'EOF'
+          import json, os
+          from google.oauth2 import service_account
+          import google.auth.transport.requests
+
+          creds = service_account.Credentials.from_service_account_file(
+              '/tmp/sa-key.json',
+              scopes=[
+                  'https://www.googleapis.com/auth/script.projects',
+                  'https://www.googleapis.com/auth/drive',
+                  'https://www.googleapis.com/auth/script.deployments',
+              ]
+          )
+          creds.refresh(google.auth.transport.requests.Request())
+          assert creds.token, 'No access token returned from service account'
+
+          with open(os.path.expanduser('~/.clasprc.json'), 'w') as f:
+              json.dump({
+                  'token': {
+                      'access_token': creds.token,
+                      'token_type': 'Bearer',
+                      'expiry_date': int(creds.expiry.timestamp() * 1000)
+                  },
+                  'oauth2ClientSettings': {
+                      'clientId': '',
+                      'clientSecret': '',
+                      'redirectUri': 'http://localhost'
+                  },
+                  'isLocalCreds': False
+              }, f)
+          print(f'clasp credentials written (token length: {len(creds.token)})')
+          EOF
 
       # ── Merge to main: auto-bump patch tag, push to Apps Script, new version ─
       - name: Auto-tag, push to Apps Script, and create version
