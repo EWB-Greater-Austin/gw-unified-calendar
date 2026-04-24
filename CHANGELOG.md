@@ -1,6 +1,6 @@
 # Changelog
 
-## [v1.1.0] — Unreleased
+## [v1.1.0] — 2026-04-23
 
 ### Added
 - **Birthday sync**: `syncBirthdays()` reads the "Chapter Project Roster" Google Sheet (tab: `Birthday`) and creates a yellow all-day "🎂 [Name]'s birthday!" event in the unified calendar for each member's next upcoming birthday. Events are automatically removed when a member is taken off the sheet.
