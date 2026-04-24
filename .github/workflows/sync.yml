@@ -41,7 +41,8 @@ jobs:
                   'https://www.googleapis.com/auth/script.projects',
                   'https://www.googleapis.com/auth/drive',
                   'https://www.googleapis.com/auth/script.deployments',
-              ]
+              ],
+              subject='webadmin@ewbgreateraustin.org'
           )
           creds.refresh(google.auth.transport.requests.Request())
           assert creds.token, 'No access token returned from service account'
