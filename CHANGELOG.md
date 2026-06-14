@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.1.4] — 2026-06-14
+
+### Changed
+- **Renamed `upsertBirthdayEvent` to `insertBirthdayEvent`**: since each year's birthday now gets its own permanent event rather than mutating a single record, the function is no longer an upsert in any meaningful sense.
+
+---
+
 ## [v1.1.3] — 2026-06-14
 
 ### Changed
