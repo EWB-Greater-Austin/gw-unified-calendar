@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.1.2] — 2026-06-14
+
+### Fixed
+- **410 "Resource has been deleted" treated as fatal**: `isNotFound()` previously only handled 404 responses. Attempting to delete or get an already-deleted calendar event returns a 410, which was re-thrown and aborted the entire member's sync run. `isNotFound()` now also matches 410 and "Resource has been deleted" — all three call sites (`removeCancelledEvent`, `unifiedEventExists`, birthday cleanup) benefit from the fix.
+
+---
+
 ## [v1.1.1] — 2026-06-14
 
 ### Fixed

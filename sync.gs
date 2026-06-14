@@ -108,7 +108,9 @@ function unifiedEventExists(id) {
 
 function isNotFound(e) {
   var msg = (e && e.message) ? e.message : '';
-  return msg.indexOf('404') !== -1 || msg.toLowerCase().indexOf('not found') !== -1;
+  return msg.indexOf('404') !== -1 || msg.indexOf('410') !== -1 ||
+         msg.toLowerCase().indexOf('not found') !== -1 ||
+         msg.toLowerCase().indexOf('resource has been deleted') !== -1;
 }
 
 // Calendar event IDs allow base32hex chars (a-v + 0-9); hex is a valid subset.
