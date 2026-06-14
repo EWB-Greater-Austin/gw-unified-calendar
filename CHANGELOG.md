@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.1.3] — 2026-06-14
+
+### Changed
+- **Birthday events now retain a permanent historical record**: each year's occurrence is written with a year-specific event ID (`birthday:<name>:<year>`) and is never updated or deleted after the day passes. Previously, the single per-person event was mutated each year, erasing the prior occurrence.
+- **Birthday cleanup removed**: events for members removed from the roster are no longer deleted — historical birthday events persist on the calendar indefinitely.
+
+---
+
 ## [v1.1.2] — 2026-06-14
 
 ### Fixed
