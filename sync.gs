@@ -34,6 +34,7 @@ function syncMember(member) {
     params.timeMin = start.toISOString();
     params.timeMax = end.toISOString();
     params.orderBy = 'startTime';
+    params.showDeleted = true;
   }
 
   var pageToken;
