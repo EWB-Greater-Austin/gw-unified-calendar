@@ -3,7 +3,6 @@ var GROUP_EMAIL        = 'internal@ewbgreateraustin.org';
 var SOURCE_KEY         = 'sourceRef'; // extendedProperties.private key
 var BIRTHDAY_SHEET_ID  = '1UAdrItjXXKI5Iv-8pH3Zx1A63_lQvpFdew166J5WlKw';
 var BIRTHDAY_TAB_NAME  = 'Master List';
-var BIRTHDAY_NAMES_KEY = 'birthdayNames'; // ScriptProperties key for cleanup tracking
 
 // Entry point — runs daily via trigger (~3am).
 function syncCalendars() {
@@ -200,9 +199,7 @@ function syncBirthdays() {
     return;
   }
 
-  var props         = PropertiesService.getScriptProperties();
-  var previousNames = JSON.parse(props.getProperty(BIRTHDAY_NAMES_KEY) || '[]');
-  var currentNames  = [];
+  var count = 0;
 
   for (var i = 1; i < data.length; i++) {
     var name    = String(data[i][nameCol]).trim();
@@ -222,35 +219,22 @@ function syncBirthdays() {
     }
     if (isNaN(month) || isNaN(day)) continue;
 
-    currentNames.push(name);
+    count++;
     upsertBirthdayEvent(name, month, day);
   }
 
-  console.log('syncBirthdays: processed ' + currentNames.length + ' birthdays');
-
-  // Remove events for people no longer in the sheet.
-  previousNames.forEach(function(name) {
-    if (currentNames.indexOf(name) === -1) {
-      var id = makeEventId('birthday:' + name);
-      try {
-        Calendar.Events.remove(UNIFIED_CAL_ID, id);
-      } catch (e) {
-        if (!isNotFound(e)) console.error('Failed removing birthday for ' + name + ': ' + e);
-      }
-    }
-  });
-
-  props.setProperty(BIRTHDAY_NAMES_KEY, JSON.stringify(currentNames));
+  console.log('syncBirthdays: processed ' + count + ' birthdays');
 }
 
-// Only ever creates/updates the single next occurrence rather than a recurring event.
-// This way, removing a member from the sheet removes their birthday from the calendar
-// on the next sync — no orphaned future recurrences to clean up.
+// Each year's occurrence gets a unique year-specific ID so past birthdays are retained
+// permanently on the calendar as a historical record.
 function upsertBirthdayEvent(name, month, day) {
-  var id    = makeEventId('birthday:' + name);
   var today = new Date();
   var bday  = new Date(today.getFullYear(), month - 1, day);
   if (bday < today) bday.setFullYear(today.getFullYear() + 1);
+
+  var ref   = 'birthday:' + name + ':' + bday.getFullYear();
+  var id    = makeEventId(ref);
 
   var tz        = Session.getScriptTimeZone();
   var startDate = Utilities.formatDate(bday, tz, 'yyyy-MM-dd');
@@ -263,7 +247,7 @@ function upsertBirthdayEvent(name, month, day) {
     start:   { date: startDate },
     end:     { date: endDate },
     colorId: '5', // banana (yellow) — matches native birthday calendar
-    extendedProperties: { private: { sourceRef: 'birthday:' + name } }
+    extendedProperties: { private: { sourceRef: ref } }
   };
 
   if (unifiedEventExists(id)) {
