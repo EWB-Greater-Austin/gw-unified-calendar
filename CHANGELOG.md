@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.1.1] — 2026-06-14
+
+### Fixed
+- **Orphaned events after full re-sync**: Full re-syncs (triggered by sync token expiry or `resetSync()`) now include `showDeleted: true`, so cancelled events within the sync window are returned by the API and removed from the unified calendar. Previously, meetings cancelled during a sync gap would persist as orphans indefinitely since their tombstones are never replayed in future incremental syncs.
+
+---
+
 ## [v1.1.0] — 2026-04-23
 
 ### Added
