@@ -220,7 +220,7 @@ function syncBirthdays() {
     if (isNaN(month) || isNaN(day)) continue;
 
     count++;
-    upsertBirthdayEvent(name, month, day);
+    insertBirthdayEvent(name, month, day);
   }
 
   console.log('syncBirthdays: processed ' + count + ' birthdays');
@@ -228,7 +228,7 @@ function syncBirthdays() {
 
 // Each year's occurrence gets a unique year-specific ID so past birthdays are retained
 // permanently on the calendar as a historical record.
-function upsertBirthdayEvent(name, month, day) {
+function insertBirthdayEvent(name, month, day) {
   var today = new Date();
   var bday  = new Date(today.getFullYear(), month - 1, day);
   if (bday < today) bday.setFullYear(today.getFullYear() + 1);
