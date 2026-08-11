@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.2.0] — 2026-08-10
+
+### Fixed
+- **Deleting an entire recurring series left orphaned events on the unified calendar**: series instances are synced under per-instance deterministic IDs, but a series-level deletion delivers a single cancellation tombstone carrying the *parent* recurring-event ID — the direct ID removal matched nothing and the orphans persisted indefinitely. Synced instances now store a `parentRef` private extended property (`<email>:<recurringEventId>`), and every cancellation additionally sweeps the unified calendar for matching `parentRef` entries and removes them. Individually cancelled occurrences continue to be removed via the direct instance-ID path.
+
+### Added
+- **`resetFutureSync()` utility**: wipes all synced events (those carrying `sourceRef`) starting from now onward, clears all sync tokens, and immediately re-runs `syncCalendars()` to repopulate. Unlike `resetSync()`, past events — including the permanent historical birthday record — are untouched. Use it to purge stale or orphaned future events (e.g. remnants of series deleted before the `parentRef` fix, which cannot be cleaned retroactively because their tombstones were already consumed). A side benefit: the refill stamps `parentRef` onto all future recurring instances, backfilling events synced before this release.
+
+---
+
 ## [v1.1.4] — 2026-06-14
 
 ### Changed
