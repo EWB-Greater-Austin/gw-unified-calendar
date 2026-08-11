@@ -1,6 +1,7 @@
 var UNIFIED_CAL_ID     = 'c_0537251faa40b34a31272711a6f62423885368638d451a8b0f5e1fcff75ee37c@group.calendar.google.com';
 var GROUP_EMAIL        = 'internal@ewbgreateraustin.org';
 var SOURCE_KEY         = 'sourceRef'; // extendedProperties.private key
+var PARENT_KEY         = 'parentRef'; // extendedProperties.private key — series ref for recurring instances
 var BIRTHDAY_SHEET_ID  = '1UAdrItjXXKI5Iv-8pH3Zx1A63_lQvpFdew166J5WlKw';
 var BIRTHDAY_TAB_NAME  = 'Master List';
 
@@ -93,6 +94,38 @@ function removeCancelledEvent(userEmail, srcEventId) {
   } catch (e) {
     if (!isNotFound(e)) throw e;
   }
+  removeInstancesOfCancelledSeries(userEmail, srcEventId);
+}
+
+// Deleting an entire recurring series produces a single tombstone carrying the
+// parent recurring-event ID, but unified events are keyed by instance ID — the
+// direct removal above matches nothing. Sweep by the parentRef property to find
+// and remove the instance copies spawned from the cancelled series.
+function removeInstancesOfCancelledSeries(userEmail, parentId) {
+  var parentRef = userEmail + ':' + parentId;
+  var removed   = 0;
+  var pageToken;
+  do {
+    var resp = Calendar.Events.list(UNIFIED_CAL_ID, {
+      privateExtendedProperty: PARENT_KEY + '=' + parentRef,
+      maxResults:  250,
+      pageToken:   pageToken,
+      showDeleted: false
+    });
+    (resp.items || []).forEach(function(ev) {
+      try {
+        Calendar.Events.remove(UNIFIED_CAL_ID, ev.id);
+        removed++;
+      } catch (e) {
+        if (!isNotFound(e)) throw e;
+      }
+    });
+    pageToken = resp.nextPageToken;
+  } while (pageToken);
+
+  if (removed > 0) {
+    console.log('Removed ' + removed + ' instances of cancelled series ' + parentRef);
+  }
 }
 
 function unifiedEventExists(id) {
@@ -126,6 +159,9 @@ function makeEventId(ref) {
 function buildPayload(src, userEmail, ref) {
   var private_ = {};
   private_[SOURCE_KEY] = ref;
+  if (src.recurringEventId) {
+    private_[PARENT_KEY] = userEmail + ':' + src.recurringEventId;
+  }
   return {
     summary:     src.summary || '(No title)',
     description: '[' + userEmail + ']' + (src.description ? '\n\n' + src.description : ''),
@@ -181,6 +217,44 @@ function resetSync() {
   });
 
   console.log('Reset complete. Deleted ' + toDelete.length + ' events. Run syncCalendars next.');
+}
+
+// Wipes synced events from now onward, clears sync tokens, and re-syncs.
+// Unlike resetSync(), past events — including the permanent birthday history —
+// are untouched. Run manually to purge stale/orphaned future events.
+// Safe to re-run syncCalendars() alone if this times out mid-refill.
+function resetFutureSync() {
+  var pageToken;
+  var toDelete = [];
+  do {
+    var resp = Calendar.Events.list(UNIFIED_CAL_ID, {
+      timeMin:     new Date().toISOString(),
+      maxResults:  500,
+      pageToken:   pageToken,
+      showDeleted: false
+    });
+    (resp.items || []).forEach(function(e) {
+      var priv = e.extendedProperties && e.extendedProperties.private;
+      if (priv && priv[SOURCE_KEY]) toDelete.push(e.id);
+    });
+    pageToken = resp.nextPageToken;
+  } while (pageToken);
+
+  toDelete.forEach(function(id) {
+    try {
+      Calendar.Events.remove(UNIFIED_CAL_ID, id);
+    } catch (e) {
+      if (!isNotFound(e)) throw e;
+    }
+  });
+
+  var props = PropertiesService.getScriptProperties();
+  props.getKeys().forEach(function(k) {
+    if (k.indexOf('syncToken_') === 0) props.deleteProperty(k);
+  });
+
+  console.log('resetFutureSync: deleted ' + toDelete.length + ' future events. Re-syncing...');
+  syncCalendars();
 }
 
 function syncBirthdays() {
