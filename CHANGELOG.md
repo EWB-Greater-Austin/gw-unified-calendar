@@ -1,5 +1,25 @@
 # Changelog
 
+## [v2.0.0] — 2026-08-21
+
+### Changed
+- **Simplified to a full-sync model**: incremental sync via Google sync tokens has been removed entirely. `syncMember()` now does a full 30-days-back/60-days-forward fetch with `showDeleted: true` on every run, for every member. There is no more `syncToken_<email>` in `ScriptProperties` and no 410-token-expiry handling — trades some extra Calendar API calls per run for simpler code and no token-expiry edge cases.
+- **Renamed entry point**: `syncCalendars()` → `sync()`. `setupTrigger()` and the CI/deployment docs now reference `sync`.
+- **Renamed `resetSync()` → `reset()`**: same full-wipe behavior (still destroys the permanent birthday history), now the only reset path — see Removed.
+- **`sourceRef`/`parentRef` are now inline string literals**: the `SOURCE_KEY`/`PARENT_KEY` top-level constants were dropped in favor of literal `'sourceRef'`/`'parentRef'` strings used consistently in `buildPayload()`, `insertBirthdayEvent()`, and `reset()`.
+- **Event descriptions no longer copy the source description**: the unified event body is now just `[organizer@ewbgreateraustin.org]`. Source descriptions can carry sensitive info (e.g. Zoom links) that shouldn't be echoed onto a shared calendar.
+- **Birthday events no longer forced yellow**: the explicit `colorId: '5'` (banana) on birthday events was removed; new/updated birthday events now take the calendar's default color. Reason: `colorId` isn't reflected on the Google Calendar HTML embed used on the website, so it was only ever visible in the Calendar UI itself — not worth the added complexity.
+- **`syncBirthdays()` failure isolation**: it's now called from its own `try/catch` inside `sync()`, so a birthday-sync failure no longer aborts or gets conflated with member event-sync failures.
+
+### Removed
+- **`resetFutureSync()`**: the future-only reset that preserved birthday history is gone. `reset()` (full wipe) is now the only reset option.
+- **Series-cancellation `parentRef` sweep**: `removeInstancesOfCancelledSeries()`, added in v1.2.0, was removed — safely, not as a regression. That sweep existed because sync-token-based incremental sync delivers a single cancellation tombstone keyed by the parent recurring-event ID when a whole series is deleted. The new full-window queries (`timeMin`/`timeMax` + `singleEvents: true`, no sync token) instead get a cancelled tombstone per individual instance in that case, so the existing direct instance-ID removal in `removeCancelledEvent()` now cleans up every instance on its own. `parentRef` is still written on every recurring instance but currently has no reader.
+
+### Known tradeoffs
+- **`getGroupMembers()` no longer paginates**: it fetches only the first page (up to 200 members) via `AdminDirectory.Members.list()`. Accepted since the group is well under 200 members today; revisit if that changes.
+
+---
+
 ## [v1.2.0] — 2026-08-10
 
 ### Fixed

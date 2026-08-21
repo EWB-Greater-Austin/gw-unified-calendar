@@ -4,29 +4,37 @@ Google Apps Script that syncs events from every member of a Google Group into a 
 
 ## How it works
 
-- A Google Group (`internal@ewbgreateraustin.org`) is the source of truth for which users get synced. Add/remove members in the Admin Console — no code change needed.
-- A daily time-driven trigger runs `syncCalendars()` at ~3am.
-- For each group member, the script reads their primary calendar via the Calendar v3 API and upserts events into the unified calendar.
+- A Google Group (`internal@ewbgreateraustin.org`) is the source of truth for which users get synced. Add/remove members in the Admin Console — no code change needed. (Fetches only the first 200 members — an accepted tradeoff since the group is well under that size.)
+- A daily time-driven trigger runs `sync()` at ~3am.
+- For each group member, the script does a **full fetch** (30 days back / 60 days forward, `showDeleted: true`) of their primary calendar via the Calendar v3 API on every run, and upserts events into the unified calendar. There is no incremental/sync-token mode.
 - Only events where the member is the **organizer** are synced. This is how shared internal meetings avoid duplicates: the creator syncs it once; invitees' runs skip it.
 - Each synced event is written with a **deterministic ID** (`SHA-1(memberEmail + ':' + sourceEventId)` as hex), so re-running a sync can never produce duplicates.
-- Incremental sync uses Google's **sync tokens**, stored per-member in `ScriptProperties`.
 
 ## Event payload
 
 | Field | Value |
 | --- | --- |
 | Title | Copied from source |
-| Description | First line: `[organizer@ewbgreateraustin.org]`, blank line, then source description |
-| Location | Always empty (intentional — no addresses or conferencing links leaked) |
+| Description | `[organizer@ewbgreateraustin.org]` only — the source description is intentionally dropped (it can contain sensitive info like Zoom links) |
+| Location | Empty, except for events organized by `operations@ewbgreateraustin.org`, whose location is preserved |
 | Start / End / Status | Copied from source |
 
 ## Functions
 
 | Function | Purpose |
 | --- | --- |
-| `syncCalendars()` | Entry point; called by the daily trigger |
+| `sync()` | Entry point; called by the daily trigger |
+| `syncBirthdays()` | Called by `sync()` inside its own try/catch; syncs birthday events from the roster sheet. No longer forces a yellow `colorId` — it wasn't visible on the Google Calendar HTML embed used on the website anyway, so it just took the calendar's default color instead |
 | `setupTrigger()` | Run once manually to install the daily trigger (replaces any existing sync trigger) |
-| `resetSync()` | Wipes all synced events from the unified calendar and clears sync tokens. Run before `syncCalendars()` when logic changes |
+| `reset()` | Wipes **all** synced events from the unified calendar, including birthday history. Run before `sync()` when logic changes. There is no future-only reset option (removed intentionally). |
+
+## Known tradeoffs
+
+`sync.gs` was recently hand-simplified (dropped incremental sync, the series-cancellation sweep, and the future-only reset) in favor of a simpler full-sync model. Accepted tradeoffs from that pass:
+
+- **Series-cancellation sweep no longer needed** — the `parentRef` sweep that used to clean up all instances of a cancelled recurring series was removed, safely: because syncing now queries by `timeMin`/`timeMax` with `singleEvents: true` instead of a sync token, Google's API returns a cancelled tombstone per individual instance (not one tombstone for the whole series) when a series is deleted, so the normal direct instance-ID removal cleans up every instance inside the sync window on its own. `parentRef` is still written on every instance but currently has no reader. The only gap: an instance whose date already fell outside the 30/60-day window when its series was deleted won't be swept up later — same as the general sync-horizon limitation.
+- **Group membership capped at 200** — `getGroupMembers()` doesn't paginate through `nextPageToken`, so members beyond the first page of 200 would be skipped. Fine today since the group is well under 200; revisit if that changes.
+- **No incremental sync** — every run does a full 30-day-back/60-day-forward fetch per member instead of using a stored sync token, trading some extra API calls for simpler code and no token-expiry edge cases.
 
 ## Google Workspace / GCP setup
 
@@ -60,7 +68,7 @@ After `clasp push`:
 
 1. Open the Apps Script editor.
 2. Run `setupTrigger()` once to install the daily trigger.
-3. If logic changed, run `resetSync()` before the next `syncCalendars()` so old events don't linger.
+3. If logic changed, run `reset()` before the next `sync()` so old events don't linger.
 
 ## CI/CD — Bidirectional sync and versioning
 
@@ -103,4 +111,6 @@ All configuration lives at the top of `sync.gs`:
 
 - `UNIFIED_CAL_ID` — the destination calendar
 - `GROUP_EMAIL` — the Google Group whose members get synced
-- `SOURCE_KEY` — the private extended-property key used to mark synced events (`resetSync()` uses this to find what to delete)
+- `BIRTHDAY_SHEET_ID` / `BIRTHDAY_TAB_NAME` — the roster sheet and tab `syncBirthdays()` reads from
+
+Note: the `sourceRef`/`parentRef` private extended-property keys used to be top-level `SOURCE_KEY`/`PARENT_KEY` constants; they're now inline string literals used consistently across `buildPayload()`, `insertBirthdayEvent()`, and `reset()`.
